@@ -1,0 +1,17 @@
+# ATAS -> MT5 bridge service config. Copy to config.yaml (git-ignored) and edit.
+listen: {host: 127.0.0.1, port: 5577}
+token: change-me            # shared secret; the indicator must send the same
+state_dir: ./state          # audit log lives here
+accounts:
+  - name: fundingpips-demo
+    terminal: "C:/Program Files/MetaTrader 5/terminal64.exe"
+    login: 10000001          # verification only; no password stored
+    server: FundingPips-Trial
+    enabled: true
+    risk_pct: 1.0
+    stop_points: 20             # index points (1.0 of price)
+    tp_points: 40               # 0 = no take-profit
+    risk_base: balance          # or equity
+    slippage_points: 5
+    magic: 557701
+    symbols: {NQ: US100}         # ATAS alias -> broker symbol

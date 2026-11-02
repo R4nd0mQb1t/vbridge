@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ATAS X native indicator (same shape as atas-x-indicators/VExhaustion).
+    ATAS X is cross-platform and its AssemblyPatcher refuses any DLL that references WPF:
+    UseWPF off, System.Drawing only, every reference resolved from the ATAS X install folder.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UseWPF>false</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>VBridge</AssemblyName>
+    <Version>2.1.1</Version>
+    <AssemblyVersion>2.1.1.0</AssemblyVersion>
+    <FileVersion>2.1.1.0</FileVersion>
+    <RootNamespace>ATAS.Indicators.Technical</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AtasXDir>C:\Program Files\ATAS X</AtasXDir>
+    <AtasXIndicatorsDir>$(AppData)\ATAS X\Indicators</AtasXIndicatorsDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="VBridge.cs" />
+    <Compile Include="Transitions.cs" />
+    <Compile Include="BridgeClient.cs" />
+    <Compile Include="Pairing.cs" />
+    <Compile Include="Follow.cs" />
+    <Compile Include="Registry.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="ATAS.Indicators;ATAS.DataFeedsCore;OFT.Attributes;OFT.Rendering;Utils.Common;System.Drawing.Common">
+      <HintPath>$(AtasXDir)\%(Identity).dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- dotnet build -c Release -t:Deploy   (close ATAS X first) -->
+  <Target Name="Deploy" DependsOnTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AtasXIndicatorsDir)" />
+    <Message Importance="high" Text="Deployed $(TargetFileName) -> $(AtasXIndicatorsDir)" />
+  </Target>
+
+</Project>

@@ -1,0 +1,173 @@
+{
+  "_comment": "Prop-firm symbol table. verified=true means confirmed on a live terminal; false = best known, confirm in the tray before the first trade. A user copy at %LocalAppData%\\VBridge\\firms.json overlays this file.",
+  "roots": {
+    "MNQ": "NQ",
+    "MES": "ES",
+    "MGC": "GC",
+    "MCL": "CL",
+    "QM": "CL"
+  },
+  "keywords": {
+    "NQ": [
+      "US Tech 100",
+      "Nasdaq",
+      "NAS100",
+      "USTEC",
+      "US100",
+      "NDX",
+      "NASDAQ"
+    ],
+    "ES": [
+      "S&P",
+      "SPX",
+      "US500",
+      "SP500",
+      "SPX500"
+    ],
+    "GC": [
+      "XAUUSD",
+      "Gold"
+    ],
+    "CL": [
+      "USOIL",
+      "WTI",
+      "Crude",
+      "West Texas"
+    ]
+  },
+  "exclude": {
+    "CL": [
+      "Brent",
+      "UKOIL"
+    ],
+    "GC": [
+      "Silver",
+      "XAG",
+      "Platinum",
+      "XPT",
+      "Micro"
+    ],
+    "NQ": [
+      "Dow",
+      "Wall Street"
+    ],
+    "ES": [
+      "Micro"
+    ]
+  },
+  "firms": {
+    "FundingPips": {
+      "server_prefixes": [
+        "FundingPips"
+      ],
+      "symbols": {
+        "NQ": {
+          "name": "NDX100",
+          "verified": true
+        },
+        "ES": {
+          "name": "SPX500",
+          "verified": true
+        },
+        "GC": {
+          "name": "XAUUSD",
+          "verified": true
+        },
+        "CL": {
+          "name": "USOIL",
+          "verified": true
+        }
+      }
+    },
+    "FTMO": {
+      "server_prefixes": [
+        "FTMO"
+      ],
+      "symbols": {
+        "NQ": {
+          "name": "US100.cash",
+          "verified": true
+        },
+        "ES": {
+          "name": "US500.cash",
+          "verified": false
+        },
+        "GC": {
+          "name": "XAUUSD",
+          "verified": false
+        },
+        "CL": {
+          "name": "USOIL.cash",
+          "verified": false
+        }
+      }
+    },
+    "The5ers": {
+      "server_prefixes": [
+        "FivePercentOnline",
+        "The5ers",
+        "5ers"
+      ],
+      "symbols": {
+        "NQ": {
+          "name": "NAS100",
+          "verified": false
+        },
+        "ES": {
+          "name": "SPX500",
+          "verified": false
+        },
+        "GC": {
+          "name": "XAUUSD",
+          "verified": false
+        },
+        "CL": {
+          "name": "USOIL",
+          "verified": false
+        }
+      }
+    },
+    "FundedNext": {
+      "server_prefixes": [
+        "FundedNext"
+      ],
+      "symbols": {
+        "NQ": {
+          "name": "NDX100",
+          "verified": true
+        },
+        "ES": {
+          "name": "SPX500",
+          "verified": true
+        },
+        "GC": {
+          "name": "XAUUSD",
+          "verified": true
+        },
+        "CL": {
+          "name": "USOUSD",
+          "verified": true
+        }
+      }
+    },
+    "GoatFunded": {
+      "server_prefixes": [
+        "Goat",
+        "GoatFunded"
+      ],
+      "symbols": {}
+    },
+    "TradingPit": {
+      "server_prefixes": [
+        "TradingPit",
+        "ThePit",
+        "TheTradingPit"
+      ],
+      "symbols": {}
+    },
+    "Other": {
+      "server_prefixes": [],
+      "symbols": {}
+    }
+  }
+}

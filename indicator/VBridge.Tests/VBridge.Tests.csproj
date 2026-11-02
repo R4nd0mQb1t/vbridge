@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests for the pure parts of the indicator (Transitions, BridgeClient).
+       No ATAS reference: builds and runs before the ATAS X install is whole. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>VBridge.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Transitions.cs" Link="src\Transitions.cs" />
+    <Compile Include="..\BridgeClient.cs" Link="src\BridgeClient.cs" Condition="Exists('..\BridgeClient.cs')" />
+    <Compile Include="..\Pairing.cs" Link="src\Pairing.cs" Condition="Exists('..\Pairing.cs')" />
+    <Compile Include="..\Follow.cs" Link="src\Follow.cs" Condition="Exists('..\Follow.cs')" />
+    <Compile Include="..\Registry.cs" Link="src\Registry.cs" Condition="Exists('..\Registry.cs')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

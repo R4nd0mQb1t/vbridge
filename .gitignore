@@ -1,0 +1,11 @@
+service/config.yaml
+service/state/
+service/logs/
+service/DISABLE
+**/bin/
+**/obj/
+__pycache__/
+.pytest_cache/
+.superpowers/
+dist/
+build/
