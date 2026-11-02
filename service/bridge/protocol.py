@@ -7,7 +7,8 @@ from dataclasses import asdict, dataclass, field
 from bridge.version import VERSION
 
 EVENT_TYPES = ("open", "close", "sync", "ping", "modify")
-MODES = ("fixed", "follow")
+MODES = ("fixed", "follow", "follow_pct")
+FOLLOW_MODES = ("follow", "follow_pct")   # both mirror the ATAS stop/target; follow_pct sizes from risk_pct
 COMMANDS = ("disable", "enable")
 DIRS = ("buy", "sell")
 
@@ -37,7 +38,7 @@ class Event:
     tp_points: float | None = None
     risk_base: str | None = None
     client_version: str | None = None
-    # v3: execution mode and the ATAS bracket as signed offsets from the ATAS entry
+    # v3: execution mode (fixed | follow | follow_pct) and the ATAS bracket as signed offsets from the ATAS entry
     mode: str | None = None
     follow: "Follow | None" = None
     arm_ts: float | None = None     # when this indicator copy armed (unix ms): the newest copy owns the chart
@@ -138,10 +139,10 @@ def parse_line(line: str) -> Event | Hello | Command:
                         atas_entry=_opt_float(raw_follow, "atas_entry"))
     if typ == "modify" and follow is None:
         raise ProtocolError("modify requires a follow object")
-    if typ == "open" and mode == "follow":
+    if typ == "open" and mode in FOLLOW_MODES:
         if follow is None:
             raise ProtocolError("follow open requires a follow object")
-        if follow.lots <= 0:
+        if mode == "follow" and follow.lots <= 0:
             raise ProtocolError("follow open requires lots > 0")
         if follow.sl_offset is None:
             raise ProtocolError("follow open requires sl_offset (a stop in ATAS)")

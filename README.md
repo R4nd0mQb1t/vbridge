@@ -2,10 +2,10 @@
 
 Trade on the futures chart in **ATAS X**, execute on your CFD prop-firm account in **MetaTrader 5**.
 
-V Bridge mirrors the *direction* of the position on an ATAS chart to one or more MT5 accounts. You set
-the risk per trade, the stop and the target on each chart; the bridge sizes the CFD from your account
-balance, opens it with the stop and target attached, and closes it when your ATAS position goes flat.
-ATAS is the master. Adds, partial closes and stop moves are not copied.
+V Bridge mirrors the *direction* of the position on an ATAS chart to one or more MT5 accounts. It opens
+the CFD with a stop attached (always), sizes it by the mode you pick on each chart (risk %, or fixed lots),
+follows your ATAS stop and target moves in the Follow modes, and closes the CFD when your ATAS position goes
+flat. ATAS is the master. Adds and partial closes are not copied.
 
 > **Notice.** V Bridge sends your ATAS trades to your MT5 account. Some prop firms restrict copiers or
 > external software. Check your firm's rules; using V Bridge is your decision.
@@ -24,8 +24,8 @@ Get the latest installer from **[Releases](https://github.com/R4nd0mQb1t/vbridge
 3. A **V Bridge** icon appears in the system tray. Open **Accounts** and **tick your MT5 account**. New
    accounts are always off until you tick them.
 4. In ATAS X, add the **V Bridge** indicator to the chart you trade from. In its settings choose your
-   **Prop firm**, the **Risk %** per trade, the **Stop** and **Target** in points. Leave Token blank; pairing
-   is automatic on this PC.
+   **Prop firm** and the **Mode** (see "Execution modes" below), then the **Risk %** per trade (or **Lots**
+   for Follow ATAS). Leave Token blank; pairing is automatic on this PC.
 5. The status box on the chart turns **green** and shows the broker symbol it resolved, for example
    `FundingPips NDX100 (verified) | 1% / 20 pts -> 1.25 lots`. Trade with Chart Trader as usual.
 
@@ -37,7 +37,7 @@ Points are the chart's own price units: 20 on NQ is 20 index points, 2 on gold i
 | colour | meaning |
 |---|---|
 | green | connected, last action ok |
-| amber | something to look at: symbol unverified (confirm it in the tray), `already mirrored`, lots capped at the broker maximum |
+| amber | something to look at: symbol found automatically (confirm it once in the tray), `already mirrored`, lots capped at the broker maximum |
 | red | service down, account not attached (Algo Trading off?), or the last action failed; the reason is in the box |
 | grey | indicator disabled: new opens blocked, closes still mirrored |
 
@@ -50,6 +50,13 @@ Points are the chart's own price units: 20 on NQ is 20 index points, 2 on gold i
   either (breakeven, trail, drag). If ATAS has no stop within 1.5 s of the fill, nothing is opened.
   Removing the ATAS stop keeps the last MT5 stop. Safety net: a lot size that would risk more than 5% of
   the account at your stop is refused.
+- **Percent Follow** (new in 2.2): like Follow ATAS, but you set **Risk %** instead of lots. The bridge
+  sizes the trade from your ATAS stop distance:
+  `lots = balance x risk % / (stop distance x value of 1 lot per point)`, rounded **down** to the
+  broker's lot step. Example: $100k at 1% = $1,000 of risk; with a 40-point NQ stop on a CFD worth
+  $20 per point per lot that is 1.25 lots, and a 20-point stop gives 2.5 lots. The size is set once at entry; later stop moves are followed but do not
+  resize the trade. The ATAS stop must be on the losing side of your entry, otherwise nothing is opened.
+  Spread and slippage can make the real loss slightly larger than the risk %, as with any EA.
 
 ### Switching MT5 accounts
 
@@ -58,24 +65,30 @@ accounts appear under **Accounts** unticked; tick to trade. If an account shows 
 automated trading on this account", the prop firm has disabled Expert Advisors for it: the bridge cannot
 trade there.
 
-### Verified symbol names
+### Known symbol names (no confirmation needed)
 
-FundingPips (NDX100, SPX500, XAUUSD, USOIL), FundedNext (NDX100, SPX500, XAUUSD, USOUSD), FTMO NQ
-(US100.cash). Others are found automatically and confirmed once under **Confirm symbols** in the tray.
+| firm | NQ | ES | GC | CL |
+|---|---|---|---|---|
+| FundingPips | NDX100 | SPX500 | XAUUSD | USOIL |
+| FundedNext | NDX100 | SPX500 | XAUUSD | USOUSD |
+| FTMO | US100.cash | US500.cash | XAUUSD | USOIL.cash (confirm once) |
+
+Everything else is found automatically and confirmed once under **Confirm symbols** in the tray.
 
 ### Prop firms
 
-The dropdown knows FundingPips (verified), FTMO, The5ers, FundedNext, Goat Funded, Trading Pit, and
-**Other**. Where the symbol name is not verified, V Bridge finds the best match on your broker's symbol
+The dropdown knows FundingPips, FundedNext, FTMO, The5ers, Goat Funded, Trading Pit, and **Other**.
+Where the symbol name is not known, V Bridge finds the best match on your broker's symbol
 list and asks you once, in the tray, to confirm it before the first trade. If it picks wrong, type the
 right name into **Broker symbol override** on the chart. The firm is also recognised from your MT5 server
 name, so two accounts at two firms each trade their own symbol from one click.
 
 ### Tray menu
 
-Accounts (tick to enable, shows login, server, firm and balance), **Kill switch** (blocks new opens;
-closes still go through), Open logs folder, Export diagnostics (a zip to send when asking for help; it
-never contains the token), Check for updates, Quit.
+**Refresh accounts now** (after switching the MT5 login), Accounts (tick to enable, shows login, server,
+firm and balance), Confirm symbols, **Kill switch** (blocks new opens; closes still go through), Open logs
+folder, Export diagnostics (a zip to send when asking for help; it never contains the token), Check for
+updates, Quit.
 
 ### Safety rules built in
 
@@ -86,6 +99,12 @@ never contains the token), Check for updates, Quit.
 - If the bridge was down when you clicked, the trade is **not** opened late at a worse price; the box
   turns red so you know.
 
+### Known issue
+
+Starting V Bridge a second time while it is already running (for example the installer's "Start V Bridge
+now" and then the desktop icon) shows an error box "server did not start". It is harmless: the first copy
+keeps running in the tray. Close the box. A friendlier message is coming in the next version.
+
 ### Uninstall
 
 Windows Settings -> Apps -> V Bridge. This removes the service, the startup entry and the indicator DLL.
@@ -93,10 +112,9 @@ Windows Settings -> Apps -> V Bridge. This removes the service, the startup entr
 ## For developers
 
 ```
-service/      Python 3.11 service: pytest (214 tests)      cd service && python -m pytest
-indicator/    C# ATAS X indicator (.NET 10, no WPF)        cd indicator/VBridge.Tests && dotnet test
+service/      Python 3.11 service: pytest (238 tests)      cd service && python -m pytest
+indicator/    C# ATAS X indicator (.NET 10, no WPF), 80 tests   cd indicator/VBridge.Tests && dotnet test
 packaging/    PyInstaller spec, Inno Setup script, build.ps1
-docs/         design specs, plans and live-check notes
 ```
 
 Build everything: `powershell -ExecutionPolicy Bypass -File packaging\build.ps1` -> `dist\VBridge-Setup-<version>.exe`.

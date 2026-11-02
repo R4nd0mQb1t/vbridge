@@ -162,13 +162,18 @@ namespace VBridge.Core
         public void Abandon() => _gate.Abandon();
 
         /// <summary>Follow mode needs service 2.1+; an older service would execute the open as fixed risk.</summary>
-        public static bool ServiceSupportsFollow(string? version)
+        public static bool ServiceSupportsFollow(string? version) => ServiceAtLeast(version, 2, 1);
+
+        /// <summary>Percent Follow (follow_pct) needs service 2.2+: older services reject the mode.</summary>
+        public static bool ServiceSupportsPercentFollow(string? version) => ServiceAtLeast(version, 2, 2);
+
+        private static bool ServiceAtLeast(string? version, int wantMajor, int wantMinor)
         {
             if (string.IsNullOrWhiteSpace(version)) return false;
             var parts = version!.Split('.');
             if (!int.TryParse(parts[0], out var major)) return false;
             var minor = parts.Length > 1 && int.TryParse(parts[1], out var m) ? m : 0;
-            return major > 2 || (major == 2 && minor >= 1);
+            return major > wantMajor || (major == wantMajor && minor >= wantMinor);
         }
 
         public bool InPosition => _gate.Current != null;

@@ -640,3 +640,85 @@ def test_modify_without_bridge_position_warns(fp):
     """I3: a modify with nothing to move must not look green."""
     r = attached2(fp).handle(fev("modify", id_=90, sl=0.0, tp=12.5))
     assert r.status == "warn" and "not mirrored" in r.reason and fp.requests == []
+
+
+# --- 2.2: Percent Follow: lots from risk % over the ATAS stop distance --------------------------------
+def pev(type_, dir_=None, id_=90, risk=1.0, sl=20.0, tp=40.0, symbol="NQ"):
+    e = ev2(type_, dir_, id_=id_, symbol=symbol)
+    e.mode = "follow_pct"
+    e.risk_pct = risk
+    e.follow = Follow(lots=0.0, sl_offset=sl, tp_offset=tp, atas_entry=28775.5)
+    return e
+
+
+def test_pct_open_sizes_from_risk_over_atas_stop(fp):
+    # 1% of 50k = $500; 20 pts x $20/pt/lot = $400 per lot -> 1.25 lots
+    r = attached2(fp).handle(pev("open", "buy"))
+    fill = fp.open_positions()[0].price_open
+    assert r.status == "ok" and r.lots == 1.25 and fp.requests[0]["volume"] == 1.25
+    assert (r.sl, r.tp) == (round(fill - 20, 2), round(fill + 40, 2))
+
+
+def test_pct_open_tighter_stop_means_more_lots(fp):
+    assert attached2(fp).handle(pev("open", "sell", sl=10.0)).lots == 2.5
+
+
+def test_pct_open_floors_never_rounds_up(fp):
+    # $500 / (30 x 20) = 0.8333 -> 0.83
+    assert attached2(fp).handle(pev("open", "buy", sl=30.0)).lots == 0.83
+
+
+def test_pct_open_uses_equity_when_asked(fp):
+    fp2 = FakeMt5(balance=50000.0, equity=40000.0, tick=Tick(bid=29470.0, ask=29470.5))
+    e = pev("open", "buy")
+    e.risk_base = "equity"
+    assert attached2(fp2).handle(e).lots == 1.0          # $400 / $400
+
+
+def test_pct_open_stop_not_on_loss_side_refused(fp):
+    for sl in (0.0, -5.0):
+        r = attached2(FakeMt5(balance=50000.0, tick=Tick(bid=29470.0, ask=29470.5))).handle(pev("open", "buy", sl=sl))
+        assert r.status == "error" and "losing side" in r.reason
+
+
+def test_pct_open_below_min_lot_refused(fp):
+    small = FakeMt5(balance=100.0, equity=100.0, tick=Tick(bid=29470.0, ask=29470.5))
+    r = attached2(small).handle(pev("open", "buy"))
+    assert r.status == "error" and "below min lot" in r.reason and small.requests == []
+
+
+def test_pct_open_risk_above_5_refused(fp):
+    r = attached2(fp).handle(pev("open", "buy", risk=8.0))
+    assert r.status == "error" and "cap" in r.reason and fp.requests == []
+
+
+def test_pct_open_max_risk_caps(fp):
+    assert attached2(fp, max_risk_pct=0.5).handle(pev("open", "buy")).lots == 0.62   # $250/$400
+
+
+def test_pct_open_ignores_lots_field(fp):
+    e = pev("open", "buy")
+    e.follow.lots = 7.0
+    assert attached2(fp).handle(e).lots == 1.25
+
+
+def test_pct_modify_and_sync_repair_follow_atas(fp):
+    w = attached2(fp)
+    assert w.handle(pev("open", "buy")).status == "ok"
+    pos = fp.open_positions()[0]
+    w.handle(pev("modify", id_=91, sl=0.0, tp=40.0))
+    assert fp.open_positions()[0].sl == round(pos.price_open, 2)
+    w.handle(pev("sync", "buy", id_=92, sl=-10.0, tp=60.0))
+    p = fp.open_positions()[0]
+    assert p.sl == round(pos.price_open + 10, 2) and p.tp == round(pos.price_open + 60, 2)
+    assert p.volume == 1.25                                # size is fixed at entry, never resized
+
+
+def test_pct_preview_shows_lots_for_current_stop(fp):
+    r = attached2(fp).handle(pev("sync", "flat", id_=93, sl=20.0))
+    assert r.preview.lots == 1.25 and r.preview.balance == 50000.0 and r.preview.note is None
+
+
+def test_pct_preview_without_stop_is_ready_not_blocked(fp):
+    r = attached2(fp).handle(pev("sync", "flat", id_=94, sl=None, tp=None))
+    assert r.status == "ok" and r.preview.lots is None and r.preview.note is None

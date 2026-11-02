@@ -144,3 +144,12 @@ def test_fundednext_table_verified_2026_11_02(firms):
 def test_ftmo_us100_cash_verified_by_live_order(firms):
     # a real FTMO-Demo order executed on US100.cash on 2026-11-02
     assert firms.table_entry("FTMO", "NQ") == {"name": "US100.cash", "verified": True}
+
+
+def test_known_firm_names_need_no_confirmation():
+    """NQ/ES/GC on FundingPips, FundedNext and FTMO are known: trade without a tray confirmation."""
+    firms = load_firms(None)
+    for firm in ("FundingPips", "FundedNext", "FTMO"):
+        for root in ("NQ", "ES", "GC"):
+            entry = firms.table_entry(firm, root)
+            assert entry and entry["verified"] is True, (firm, root)

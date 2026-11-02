@@ -35,7 +35,9 @@ public enum ExecutionMode
 	[Description("Fixed risk (risk %, stop, target)")]
 	FixedRisk,
 	[Description("Follow ATAS (lots + ATAS stop/target)")]
-	FollowAtas
+	FollowAtas,
+	[Description("Percent Follow (risk % + ATAS stop/target)")]
+	PercentFollow
 }
 
 public enum StatusCorner
@@ -52,13 +54,14 @@ public enum StatusCorner
 ///  - Fixed risk: the bridge sizes from risk % and uses its own stop/target distances.
 ///  - Follow ATAS: the bridge opens a fixed lot size with the stop/target you placed in ATAS, and follows
 ///    later moves of either.
+///  - Percent Follow: as Follow ATAS, but the lot size comes from risk % over the ATAS stop distance.
 /// Sensor + display only: this indicator never places an order in ATAS.
 /// </summary>
 [DisplayName("V Bridge")]
 [Description("Mirrors this chart's position to the ATAS->MT5 bridge service.")]
 public class VBridge : Indicator
 {
-	public const string ClientVersion = "2.1.1";
+	public const string ClientVersion = "2.2.0";
 
 	private const string AccountGroup = "1. Account";
 	private const string RiskGroup = "2. Risk";
@@ -160,7 +163,7 @@ public class VBridge : Indicator
 	}
 
 	[OFT.Attributes.Parameter]
-	[Display(Name = "Risk % per trade (Fixed risk mode)", GroupName = RiskGroup, Order = 10)]
+	[Display(Name = "Risk % per trade (Fixed risk / Percent Follow)", GroupName = RiskGroup, Order = 10)]
 	[Range(0.01, 100)]
 	public decimal RiskPct
 	{
@@ -253,7 +256,8 @@ public class VBridge : Indicator
 		set { _symbolAlias = (value ?? "").Trim(); RecalculateValues(); }
 	}
 
-	private bool Follow => _mode == ExecutionMode.FollowAtas;
+	private bool Follow => _mode is ExecutionMode.FollowAtas or ExecutionMode.PercentFollow;
+	private bool PercentFollow => _mode == ExecutionMode.PercentFollow;
 
 	// ------------------------------------------------------------------ lifecycle
 
@@ -435,10 +439,12 @@ public class VBridge : Indicator
 			{
 				case FollowAction.Open open:
 					_followNote = "";
-					if (!FollowEngine.ServiceSupportsFollow(_serviceVersion))
+					if (PercentFollow ? !FollowEngine.ServiceSupportsPercentFollow(_serviceVersion)
+					                  : !FollowEngine.ServiceSupportsFollow(_serviceVersion))
 					{
 						lock (_lock) _follow.Abandon();
-						_followNote = $"service {(_serviceVersion == "" ? "version unknown" : _serviceVersion)} is too old for Follow ATAS (needs 2.1+): not mirrored";
+						_followNote = $"service {(_serviceVersion == "" ? "version unknown" : _serviceVersion)} is too old for "
+						              + (PercentFollow ? "Percent Follow (needs 2.2+)" : "Follow ATAS (needs 2.1+)") + ": not mirrored";
 						_lastAck = _followNote;
 						_lastAckStatus = "error";
 						Log(_followNote);
@@ -452,7 +458,7 @@ public class VBridge : Indicator
 					}
 					var id = client.Send("open", open.Dir, Alias(), _account, _security, open.Offsets.AtasEntry, _lots,
 					                     CurrentRisk(), open.Offsets);
-					_lastEvent = $"open {open.Dir} {_lots:0.##} lots sl {open.Offsets.SlOffset:0.##} tp {Fmt(open.Offsets.TpOffset)} #{id}";
+					_lastEvent = $"open {open.Dir} {SizeLabel()} sl {open.Offsets.SlOffset:0.##} tp {Fmt(open.Offsets.TpOffset)} #{id}";
 					if (id < 0)
 					{
 						lock (_lock) _follow.Abandon();      // never send moves for a trade MT5 never got
@@ -461,7 +467,7 @@ public class VBridge : Indicator
 					}
 					else
 						_pendingOpenId = id;
-					Log($"follow open {open.Dir} lots={_lots} sl_offset={open.Offsets.SlOffset} tp_offset={open.Offsets.TpOffset} -> id {id}");
+					Log($"follow open {open.Dir} {SizeLabel()} sl_offset={open.Offsets.SlOffset} tp_offset={open.Offsets.TpOffset} -> id {id}");
 					break;
 				case FollowAction.Modify mod:
 					var mid = client.Send("modify", null, Alias(), _account, _security, 0m, 0m, CurrentRisk(), mod.Offsets);
@@ -554,10 +560,14 @@ public class VBridge : Indicator
 			_riskPct, _stopPoints, _tpPoints,
 			_riskBase == RiskBase.Balance ? "balance" : "equity",
 			ClientVersion,
-			Follow ? "follow" : "fixed",
-			Follow ? _lots : null,
+			PercentFollow ? "follow_pct" : Follow ? "follow" : "fixed",
+			PercentFollow ? 0m : Follow ? _lots : null,
 			Follow ? offsets : null);
 	}
+
+	private string SizeLabel() => PercentFollow
+		? $"{_riskPct.ToString("0.##", CultureInfo.InvariantCulture)}% risk"
+		: $"{_lots.ToString("0.##", CultureInfo.InvariantCulture)} lots";
 
 	private string Alias()
 	{
@@ -691,8 +701,10 @@ public class VBridge : Indicator
 			if (Follow)
 			{
 				var cur = _follow.Current;
-				risk = $"Follow ATAS {_lots.ToString("0.##", CultureInfo.InvariantCulture)} lots"
-				       + (cur != null ? $" | sl {Fmt(cur.SlOffset)} tp {Fmt(cur.TpOffset)}" : "");
+				risk = (PercentFollow ? $"Percent Follow {SizeLabel()}" : $"Follow ATAS {SizeLabel()}")
+				       + (cur != null ? $" | sl {Fmt(cur.SlOffset)} tp {Fmt(cur.TpOffset)}" : "")
+				       + (PercentFollow && cur != null && _preview?.Lots != null
+					       ? $" -> {_preview.Lots.Value.ToString("0.##", CultureInfo.InvariantCulture)} lots" : "");
 			}
 			else
 			{

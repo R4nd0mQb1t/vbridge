@@ -324,6 +324,18 @@ public class ReviewFixTests
         Assert.Equal(expected, FollowEngine.ServiceSupportsFollow(version));   // I4
     }
 
+    [Theory]
+    [InlineData("2.2.0", true)]
+    [InlineData("2.3.1", true)]
+    [InlineData("3.0.0", true)]
+    [InlineData("2.1.1", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void ServiceSupportsPercentFollow(string? version, bool expected)
+    {
+        Assert.Equal(expected, FollowEngine.ServiceSupportsPercentFollow(version));
+    }
+
     [Fact]
     public void Registry_ReclaimWhenNewerCopyLeaves()
     {

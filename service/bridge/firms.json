@@ -90,11 +90,11 @@
         },
         "ES": {
           "name": "US500.cash",
-          "verified": false
+          "verified": true
         },
         "GC": {
           "name": "XAUUSD",
-          "verified": false
+          "verified": true
         },
         "CL": {
           "name": "USOIL.cash",

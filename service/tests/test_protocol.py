@@ -154,3 +154,24 @@ def test_result_round_trips_through_dict_with_preview():
     assert back == r and isinstance(back.preview, Preview)
     plain = AccountResult(account="a", status="ok", closed=[1])
     assert result_from_dict(asdict(plain)) == plain
+
+
+# --- 2.2: Percent Follow (risk % sizes the lots, ATAS stop/target as in Follow ATAS) -----------------
+PCT_OPEN = ('{"id":63,"type":"open","dir":"buy","symbol":"NQ","account":"a","security":"NQZ6","ts":"t",'
+            '"risk_pct":1.0,"mode":"follow_pct","follow":{"lots":0,"sl_offset":20.0,"tp_offset":40.0}}')
+
+
+def test_parse_percent_follow_open_without_lots():
+    ev = parse_line(PCT_OPEN)
+    assert ev.mode == "follow_pct" and ev.risk_pct == 1.0 and ev.follow.sl_offset == 20.0
+
+
+def test_percent_follow_open_without_stop_rejected():
+    with pytest.raises(ProtocolError, match="sl_offset"):
+        parse_line(PCT_OPEN.replace('"sl_offset":20.0', '"sl_offset":null'))
+
+
+def test_percent_follow_modify_parses():
+    ev = parse_line('{"id":64,"type":"modify","symbol":"NQ","account":"a","security":"NQZ6","ts":"t",'
+                    '"mode":"follow_pct","follow":{"lots":0,"sl_offset":0.0,"tp_offset":40.0}}')
+    assert ev.type == "modify" and ev.mode == "follow_pct"

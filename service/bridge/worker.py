@@ -14,7 +14,7 @@ from bridge.config import MAX_RISK_PCT, AccountConfig
 from bridge.mt5_api import (ACTION_DEAL, ACTION_SLTP, FILLING_FOK, FILLING_IOC, FILLING_RETURN, RET_DONE,
                             RET_PLACED, RETRYABLE, SYMBOL_FILLING_FOK, SYMBOL_FILLING_IOC, TIME_GTC, TYPE_BUY,
                             TYPE_SELL, Mt5Api, OrderResult, PositionInfo)
-from bridge.protocol import AccountResult, Event, Preview
+from bridge.protocol import FOLLOW_MODES, AccountResult, Event, Preview
 from bridge.sizing import (SymbolSpec, bracket_prices, check_stops_level, compute_lots, floor_lots,
                            value_per_point_per_lot)
 from bridge.symbols import Firms, Resolution, load_firms, resolve
@@ -183,7 +183,7 @@ class AccountWorker:
         if not res.verified and (res.root, res.symbol) not in self.confirmed:
             raise Refused(f"confirm symbol {res.symbol} for {res.root} in the tray before the first trade")
 
-    def _risk(self, event: Event) -> RiskParams:
+    def _risk_pct(self, event: Event) -> float:
         risk_pct = event.risk_pct if event.risk_pct is not None else self.cfg.risk_pct
         if self.cfg.max_risk_pct is not None:
             risk_pct = min(risk_pct, self.cfg.max_risk_pct)
@@ -191,6 +191,10 @@ class AccountWorker:
             raise Refused(f"risk_pct {risk_pct:g} above the {MAX_RISK_PCT:g}% cap (account must allow high risk)")
         if risk_pct <= 0:
             raise Refused("risk_pct must be > 0")
+        return risk_pct
+
+    def _risk(self, event: Event) -> RiskParams:
+        risk_pct = self._risk_pct(event)
         stop = event.stop_points if event.stop_points is not None else self.cfg.stop_points
         tp = event.tp_points if event.tp_points is not None else self.cfg.tp_points
         base = event.risk_base or self.cfg.risk_base
@@ -206,8 +210,27 @@ class AccountWorker:
                 raise Refused(f"price scale mismatch (chart {event.chart_price:g} vs broker {res.symbol} {bid:g}, "
                               f"{gap:.1%} apart)")
 
+    def _pct_lots(self, event: Event, res: Resolved, sl_offset: float) -> tuple[float, bool, float]:
+        """Percent Follow: (lots, capped, risk money) for risk % over the ATAS stop distance. Raises Refused."""
+        if sl_offset <= 0:
+            raise Refused("Percent Follow: the ATAS stop must be on the losing side of the entry to size by risk %")
+        risk_pct = self._risk_pct(event)
+        base = self._base_money(event)
+        money = base * risk_pct / 100.0
+        lots = compute_lots(res.spec, money, sl_offset)
+        if lots <= 0:
+            raise Refused(f"below min lot (risk {money:.2f} over {sl_offset:g} pts on {res.symbol})")
+        capped = money / (sl_offset * value_per_point_per_lot(res.spec)) > res.spec.volume_max
+        return lots, capped, money
+
+    def _base_money(self, event: Event) -> float:
+        acc = self.api.account_info()
+        if acc is None:
+            raise Refused("account_info unavailable")
+        return acc.equity if (event.risk_base or self.cfg.risk_base) == "equity" else acc.balance
+
     def _follow_plan(self, event: Event, res: Resolved, bid: float):
-        """Follow-ATAS open: (lots, levels(fill) -> (sl, tp), note). Raises Refused on any guard."""
+        """Follow-ATAS / Percent Follow open: (lots, levels(fill) -> (sl, tp), note). Raises Refused on any guard."""
         f = event.follow
         if f is None or f.sl_offset is None:
             raise Refused("Follow ATAS: no stop in ATAS, trade not mirrored")
@@ -218,13 +241,13 @@ class AccountWorker:
             reason = check_stops_level(res.spec, f.sl_offset, f.tp_offset or 0.0)
             if reason:
                 raise Refused(reason)
-        lots, capped = floor_lots(res.spec, f.lots)
-        if lots <= 0:
-            raise Refused(f"below min lot ({f.lots:g} < {res.spec.volume_min:g} on {res.symbol})")
-        acc = self.api.account_info()
-        if acc is None:
-            raise Refused("account_info unavailable")
-        base = acc.equity if (event.risk_base or self.cfg.risk_base) == "equity" else acc.balance
+        if event.mode == "follow_pct":
+            lots, capped, _ = self._pct_lots(event, res, f.sl_offset)
+        else:
+            lots, capped = floor_lots(res.spec, f.lots)
+            if lots <= 0:
+                raise Refused(f"below min lot ({f.lots:g} < {res.spec.volume_min:g} on {res.symbol})")
+        base = self._base_money(event)
         implied = lots * max(f.sl_offset, 0.0) * value_per_point_per_lot(res.spec)
         pct = implied / base * 100.0 if base > 0 else 0.0
         if self.cfg.max_risk_pct is not None and pct > self.cfg.max_risk_pct:
@@ -305,7 +328,7 @@ class AccountWorker:
         tick = self.api.symbol_tick(broker)
         if tick is None:
             raise Refused(f"no quote for {broker}")
-        follow = event.mode == "follow"
+        follow = event.mode in FOLLOW_MODES
         if follow:
             lots, levels, plan_note = self._follow_plan(event, res, tick.bid)
         else:
@@ -453,7 +476,7 @@ class AccountWorker:
         except Refused as exc:
             return Preview(symbol=None, verified=False, source="none", note=str(exc)), str(exc)
         note = None
-        if event.mode == "follow" and event.follow is not None:
+        if event.mode in FOLLOW_MODES and event.follow is not None:
             return self._follow_preview(event, res)
         try:
             self._check_confirmed(res)
@@ -482,7 +505,8 @@ class AccountWorker:
                        value_per_point=value_per_point_per_lot(res.spec), note=note), note
 
     def _follow_preview(self, event: Event, res: Resolved) -> tuple[Preview, str | None]:
-        """Follow mode: lots are the user's; preview shows them floored and any blocking reason."""
+        """Follow modes: lots are the user's (follow) or from risk % over the ATAS stop (follow_pct, once a stop
+        exists); the preview shows them and any blocking reason."""
         note = None
         lots, balance = None, None
         try:
@@ -491,11 +515,18 @@ class AccountWorker:
             if tick is None or tick.bid <= 0:
                 raise Refused(f"no quote yet for {res.symbol} (added to Market Watch; retrying)")
             self._price_guard(event, res, tick.bid)
-            lots, capped = floor_lots(res.spec, event.follow.lots)
-            if lots <= 0:
-                note = f"below min lot ({event.follow.lots:g} < {res.spec.volume_min:g})"
-                lots = None
-            elif capped:
+            if event.mode == "follow_pct":
+                lots, capped = None, False
+                sl = event.follow.sl_offset
+                self._risk_pct(event)                     # surface a refused risk % before the first trade
+                if sl is not None and sl > 0:             # a trade is on: show the size its stop gives
+                    lots, capped, _ = self._pct_lots(event, res, sl)
+            else:
+                lots, capped = floor_lots(res.spec, event.follow.lots)
+                if lots <= 0:
+                    note = f"below min lot ({event.follow.lots:g} < {res.spec.volume_min:g})"
+                    lots = None
+            if capped:
                 note = f"capped at broker max {res.spec.volume_max:g} lots"
             acc = self.api.account_info()
             balance = acc.balance if acc else None
@@ -528,7 +559,7 @@ class AccountWorker:
             reason = "direction mismatch: closed opposite CFD; not mirrored" if closed else "not mirrored"
             return self._warn(reason, closed=closed or None, preview=preview)
         f = event.follow
-        if event.mode == "follow" and f is not None and (f.sl_offset is not None or f.tp_offset is not None):
+        if event.mode in FOLLOW_MODES and f is not None and (f.sl_offset is not None or f.tp_offset is not None):
             # repair a lost modify: bring the MT5 bracket back to the ATAS offsets
             spec = self.api.symbol_info(preview.symbol)
             for pos in same:

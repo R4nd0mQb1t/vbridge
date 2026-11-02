@@ -383,6 +383,23 @@ public class BridgeClientTests
     }
 
     [Fact]
+    public void Send_PercentFollowOpen_WritesRiskAndFollowObject()
+    {
+        using var server = new FakeServer();
+        using var client = NewClient(server.Port, () => null);
+        client.Start();
+        WaitUntil(() => client.Connected);
+        var risk = Risk with { Mode = "follow_pct", FollowLots = 0m };
+        client.Send("open", "sell", "NQ", "acc1", "NQZ6", 28775.5m, 1m, risk, new FollowOffsets(15m, 45m, 28775.5m));
+        var r = server.WaitLine(d => FakeServer.Type(d) == "open").RootElement;
+        Assert.Equal("follow_pct", r.GetProperty("mode").GetString());
+        Assert.Equal((double)Risk.RiskPct!.Value, r.GetProperty("risk_pct").GetDouble());
+        var f = r.GetProperty("follow");
+        Assert.Equal(15, f.GetProperty("sl_offset").GetDouble());
+        Assert.Equal(45, f.GetProperty("tp_offset").GetDouble());
+    }
+
+    [Fact]
     public void Send_Modify_NullTargetWrittenAsNull()
     {
         using var server = new FakeServer();

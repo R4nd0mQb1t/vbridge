@@ -71,7 +71,8 @@ begin
     'V Bridge sends your ATAS trades to your MT5 account.',
     'What it does' + #13#10 +
     '- You trade on the ATAS X chart as usual. V Bridge mirrors the DIRECTION of your position to the MT5 ' +
-    'account(s) you enable, sized by the risk %, stop and target you set on each chart.' + #13#10 +
+    'account(s) you enable. Pick a mode on each chart: Fixed risk (risk %, stop, target), Follow ATAS (lots + ' +
+    'your ATAS stop/target) or Percent Follow (risk % sized from your ATAS stop, follows stop/target moves).' + #13#10 +
     '- When your ATAS position goes flat, the MT5 position is closed.' + #13#10#13#10 +
     'What it needs' + #13#10 +
     '- ATAS X installed. - MetaTrader 5 running and logged in, with the Algo Trading button ON.' + #13#10 +

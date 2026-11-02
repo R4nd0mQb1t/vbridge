@@ -20,7 +20,8 @@ namespace VBridge.Core
                                  string ServiceVersion = "", bool Standby = false);
 
     /// <summary>Per-chart risk and symbol settings, sent with every open and sync (protocol v2/v3). Nulls are omitted.
-    /// Mode "follow" adds a follow object: lots from FollowLots, offsets from the explicit argument or Offsets.</summary>
+    /// Modes "follow" and "follow_pct" add a follow object: lots from FollowLots (0 for follow_pct, sized by the
+    /// service from RiskPct), offsets from the explicit argument or Offsets.</summary>
     public sealed record RiskSettings(string? Firm, string? SymbolOverride, string? Instrument, decimal? ChartPrice,
                                       decimal? RiskPct, decimal? StopPoints, decimal? TpPoints, string? RiskBase,
                                       string ClientVersion, string? Mode = null, decimal? FollowLots = null,
@@ -163,7 +164,7 @@ namespace VBridge.Core
                 AppendStr(sb, "risk_base", risk.RiskBase);
                 AppendStr(sb, "client_version", risk.ClientVersion);
                 AppendStr(sb, "mode", risk.Mode);
-                if (risk.Mode == "follow")
+                if (risk.Mode is "follow" or "follow_pct")
                 {
                     var off = follow ?? risk.Offsets;
                     sb.Append(",\"follow\":{\"lots\":")
